@@ -1,12 +1,30 @@
 const express = require('express');
 const router = express.Router();
-// const controller = require('../controllers/userController');
-const controller = require('../modules/user/user.controller');
+const User = require('../models/userModel');
+const Message = require('../models/messageModel');
 
-router.get('/', controller.getUsers);
-router.get('/:id', controller.getUser);
-router.post('/', controller.createUser);
-router.put('/:id', controller.updateUser);
-router.delete('/:id', controller.deleteUser);
+function isAuthenticated(req, res, next) {
+  if (req.session.userId) return next();
+  res.redirect('/auth/login');
+}
+
+router.get('/chat', isAuthenticated, async (req, res) => {
+  const users = await User.find({ _id: { $ne: req.session.userId } });
+  const selectedUserId = req.query.user;
+  let selectedUser = null;
+  let messages = [];
+
+  if (selectedUserId) {
+    selectedUser = await User.findById(selectedUserId);
+    messages = await Message.find({
+      $or: [
+        { from: req.session.userId, to: selectedUserId },
+        { from: selectedUserId, to: req.session.userId },
+      ],
+    }).sort('createdAt');
+  }
+
+  res.render('chat', { users, selectedUser, messages });
+});
 
 module.exports = router;
