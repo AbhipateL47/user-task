@@ -3,8 +3,11 @@ const router = express.Router();
 const authMiddleware = require('../middlewares/authMiddleware');
 const ChatController = require('./chat.controller');
 
-router.get('/chat', ChatController.renderChatPage);
+router.get('/', ChatController.renderChatPage);
+router.get('/users', authMiddleware, ChatController.getUsersWithUnreadCounts);
+router.get('/messages/:receiverId', authMiddleware, ChatController.loadChatHistory);
 router.post('/messages/mark-read', ChatController.markMessagesAsRead);
+
 router.get('/:userId', authMiddleware, async (req, res) => {
   console.log("s",req.userId, req.params.userId);
   const messages = await ChatService.getMessagesBetween(req.userId, req.params.userId);

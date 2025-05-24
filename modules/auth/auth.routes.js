@@ -10,7 +10,7 @@ router.get('/login', (req, res) => {
   res.render('login', { title: 'Login', error: null });
 });
 
-router.post('/login', async (req, res) => {
+router.post('/auth/login', async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.email });
     if (!user || !user.password) {
@@ -23,7 +23,7 @@ router.post('/login', async (req, res) => {
     }
 
     // create JWT token with userId payload
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id, user }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token, username: user.username, email: user.email });
   } catch (err) {
@@ -35,7 +35,7 @@ router.get('/register', (req, res) => {
   res.render('register', { title: 'Register', error: null });
 });
 
-router.post('/register', async (req, res) => {
+router.post('/auth/register', async (req, res) => {
   const { username, email, password } = req.body;
   const exists = await User.findOne({ email });
   if (exists) return res.render('register', { title: 'Register', error: 'Email already in use' });
@@ -44,13 +44,13 @@ router.post('/register', async (req, res) => {
   const user = new User({ username, email, password: passwordHash });
   await user.save();
 
-  res.redirect('/auth/login');
+  res.redirect('/login');
 });
 
 router.get('/logout', (req, res) => {
   localStorage.removeItem('token');
   localStorage.removeItem('username');
-  window.location.href = '/auth/login';
+  window.location.href = '/login';
 });
 
 // API-based routes for JSON token responses

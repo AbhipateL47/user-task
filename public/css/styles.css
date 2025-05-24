@@ -216,9 +216,8 @@ body {
 }
 
 #logoutBtn {
-  background-color: transparent;
-  color: #f87171;
-  border: 2px solid #f87171;
+  background-color: #f87171;
+  color: #fff;
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 0.95rem;
@@ -228,9 +227,12 @@ body {
 }
 
 #logoutBtn:hover {
-  background-color: #f87171;
-  color: #fff;
+  background-color: transparent;
+  color: #f87171;
+  border: 2px solid #f87171;
 }
+
+
 
 
 /* body, html {

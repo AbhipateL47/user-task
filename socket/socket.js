@@ -19,7 +19,7 @@ module.exports = (io) => {
       if (err) {
         return next(new Error('Token verification failed'));
       }
-      socket.userId = decoded.id || decoded.userId; // Adjust according to your token payload
+      socket.userId = decoded.id || decoded.userId;
       next();
     });
   });

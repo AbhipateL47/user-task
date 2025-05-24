@@ -1,21 +1,8 @@
 <div class="app-container">
   <div class="sidebar">
     <h2>Users</h2>
-    <ul class="user-list">
-      <% users.forEach(user=> { %>
-        <li class="user-item <%= user._id.toString() === selectedUser?._id.toString() ? 'selected' : '' %>">
-          <button class="user-link" data-userid="<%= user._id %>">
-            <%= user.username %>
-              <% if (user.unreadCount> 0) { %>
-                <span class="unread-count">
-                  <%= user.unreadCount %>
-                </span>
-                <% } %>
-          </button>
-        </li>
-        <% }) %>
-    </ul>
-    <button id="logoutBtn" type="button">Logout</button>
+    <ul id="userList" class="user-list"></ul>
+    <button id="logoutBtn">Logout</button>
   </div>
 
   <div class="chat-container">
@@ -36,59 +23,70 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  document.getElementById('logoutBtn').addEventListener('click', () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    localStorage.removeItem('email');
-    window.location.href = '/auth/login';
-  });
-
   const currentUsername = localStorage.getItem('username');
-  document.querySelectorAll('.user-item').forEach(li => {
-    const btn = li.querySelector('.user-link');
-    if (btn.textContent.trim() === currentUsername) {
-      li.remove();
-    }
-  });
+  const token = localStorage.getItem('token');
+  const selectedUserId = '<%= selectedUser?._id?.toString() || "" %>';
 
-  const currentUserId = '<%= selectedUser?._id?.toString() || "" %>';
+  document.getElementById('logoutBtn').onclick = () => {
+    localStorage.clear();
+    location.href = '/login';
+  };
 
-  document.querySelectorAll('.user-link').forEach(button => {
-    button.addEventListener('click', async () => {
-      const clickedUserId = button.getAttribute('data-userid');
-      if (clickedUserId === currentUserId) {
-        window.location.href = '/chat';
-      } else {
-        // console.log("Hello")
-        // await loadChatHistory();
-        await fetch('/messages/mark-read', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({ fromUserId: clickedUserId }),
-        });
-        window.location.href = `/chat?user=${clickedUserId}`;
-      }
+  document.addEventListener('DOMContentLoaded', fetchUsers);
+
+  async function fetchUsers() {
+    const res = await fetch('/chat/users', {
+      headers: { Authorization: `Bearer ${token}` }
     });
-  });
+    const users = await res.json();
+    const userList = document.getElementById('userList');
+    userList.innerHTML = '';
+
+    users
+      .filter(u => u.username !== currentUsername)
+      .forEach(user => {
+        const li = document.createElement('li');
+        li.className = 'user-item' + (user._id === selectedUserId ? ' selected' : '');
+
+        const btn = document.createElement('button');
+        btn.className = 'user-link';
+        btn.dataset.userid = user._id;
+        btn.textContent = user.username;
+
+        if (user.unreadCount > 0) {
+          const badge = document.createElement('span');
+          badge.className = 'unread-count';
+          badge.textContent = user.unreadCount;
+          btn.appendChild(badge);
+        }
+
+        btn.onclick = () =>
+          location.href = user._id === selectedUserId ? '/chat' : `/chat?user=${user._id}`;
+
+        li.appendChild(btn);
+        userList.appendChild(li);
+      });
+  }
 
   <% if (selectedUser) { %>
-    const token = localStorage.getItem('token');
     const socket = io({ auth: { token }, withCredentials: true });
-
-    socket.on('connect', () => {
-      socket.emit('joinRoom', '<%= selectedUser._id %>');
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('Socket connection error:', err.message);
-    });
-
     const chatMessages = document.getElementById('chatMessages');
     const chatInput = document.getElementById('chatInput');
     const sendBtn = document.getElementById('sendBtn');
+
+    socket.on('connect', () => socket.emit('joinRoom', '<%= selectedUser._id %>'));
+    socket.on('connect_error', err => console.error('Socket error:', err.message));
+
+    sendBtn.onclick = sendMessage;
+    chatInput.onkeydown = e => (e.key === 'Enter' ? (e.preventDefault(), sendMessage()) : null);
+
+    function formatTime(date) {
+      const d = new Date(date);
+      const h = d.getHours();
+      const m = d.getMinutes().toString().padStart(2, '0');
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      return `${(h % 12 || 12)}:${m} ${ampm}`;
+    }
 
     function addMessage(text, fromMe) {
       const div = document.createElement('div');
@@ -100,57 +98,43 @@
 
     async function loadChatHistory() {
       try {
-        const res = await fetch(`/messages/<%= selectedUser._id %>`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+        const res = await fetch(`/chat/messages/<%= selectedUser._id %>`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
         const messages = await res.json();
-        messages.forEach(msg => {
-          addMessage(msg.text, msg.fromSelf);
-        });
+        messages.forEach(msg => addMessage(msg.text, msg.fromSelf, msg.createdAt));
       } catch (err) {
-        console.error('Failed to load chat history:', err);
+        console.error('Chat history error:', err);
       }
     }
 
     function sendMessage() {
       const text = chatInput.value.trim();
       if (!text) return;
-      socket.emit('chatMessage', { toUserId: '<%= selectedUser._id.toString() %>', text });
+      socket.emit('chatMessage', { toUserId: '<%= selectedUser._id %>', text });
       addMessage(text, true);
       chatInput.value = '';
     }
 
-    sendBtn.addEventListener('click', () => {
-      sendMessage();
-      chatInput.focus();
-    });
-
-    chatInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    socket.on('message', ({ from, text }) => {
-      if (from === '<%= selectedUser._id %>') {
-        addMessage(text, false);
+    socket.on('message', ({ from, text, createdAt }) => {
+      if (from === selectedUserId) {
+        addMessage(text, false, createdAt);
       } else {
         const btn = document.querySelector(`.user-link[data-userid="${from}"]`);
         if (btn) {
           let badge = btn.querySelector('.unread-count');
           if (!badge) {
             badge = document.createElement('span');
-            badge.classList.add('unread-count');
+            badge.className = 'unread-count';
             badge.textContent = '1';
             btn.appendChild(badge);
           } else {
-            badge.textContent = parseInt(badge.textContent) + 1;
+            badge.textContent = +badge.textContent + 1;
           }
         }
       }
     });
+
+    loadChatHistory();
   <% } %>
 </script>
